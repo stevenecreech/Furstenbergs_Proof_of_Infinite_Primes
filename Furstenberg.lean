@@ -1,5 +1,4 @@
 import Mathlib
-
 open Set
 
 namespace Furstenberg
@@ -198,31 +197,132 @@ lemma arithSeq_is_clopen (a b : ℤ) (ha : a ≠ 0) :
     use a, b
 
   -- Closed: complement is a finite union of open sets
-  let A := Finset.range (Int.natAbs a)
-  let rest : Set ℤ := ⋃ j ∈ A.filter (fun j ↦ j ≠ (b % a).natAbs), arithSeq a (b + j)
-
-
-  have hcompl : arithSeq a b =
-  univ \ ⋃ j ∈ A.filter (fun j ↦ j ≠ (b % a).natAbs), arithSeq a (b + j) := by
+  let A : Finset ℕ := Finset.Ico 1 a.natAbs
+  let rest := ⋃ j ∈ A, arithSeq a (b + j)
+  have hcompl : arithSeq a b = univ \ rest := by
     ext z
-    simp only [arithSeq, mem_diff, mem_univ, mem_iUnion, mem_setOf_eq, Finset.mem_filter,
-                Finset.mem_range, not_exists, not_and, not_not]
-    sorry
+    simp only [arithSeq, mem_diff, mem_univ, mem_iUnion, mem_setOf_eq]
+    constructor
+    · rintro ⟨n, rfl⟩
+      constructor
+      · exact trivial
+      · intro h
+        unfold rest at h
+        simp only [Set.mem_iUnion] at h
+        obtain ⟨j, hjA, n'⟩ := h
+        obtain ⟨k, hk⟩ := n'
+        have h_eq : a * n + b = a * k + (b + ↑j) := hk
+        have h_sub_b : a * n = a * k + ↑j := by linarith [h_eq]
+        have h_divides : a * (n - k) = ↑j := by linarith [h_sub_b]
+        have a_dvd_j : a ∣ ↑j := ⟨n - k, by linarith⟩
+        -- From j ∈ A = Finset.Ico 1 a.natAbs, we have 1 ≤ j < a.natAbs
+        have j_ge_1 : 1 ≤ j := Finset.mem_Ico.mp hjA |>.left
+        have j_lt_a : j < a.natAbs := Finset.mem_Ico.mp hjA |>.right
+        -- Therefore j ≠ 0, so ↑j.natAbs = j, and 0 < j < a.natAbs
+        have j_pos : 0 < j := Nat.lt_of_lt_of_le zero_lt_one j_ge_1
+        -- So ↑j = a * m for some m ∈ ℤ, and j = |↑j| = |a * m| ≥ |a| = a.natAbs
+        obtain ⟨m, hm⟩ := a_dvd_j
+        have : (a * m).natAbs = a.natAbs * m.natAbs := Int.natAbs_mul a m
+        have m_dvd_j: m ∣ j := by
+          use a
+          rw[hm]
+          ring
+        have mneq0 : m ≠ 0 := by
+          by_contra m0
+          rw[m0] at hm
+          have : j = 0 := by
+            rw [mul_zero] at hm
+            exact Int.ofNat_eq_zero.mp hm
+          rw [hm, mul_zero] at hm
+          linarith
+        have mabsge1 : m.natAbs ≥ 1 := by
+          refine Nat.one_le_iff_ne_zero.mpr ?_
+          exact Int.natAbs_ne_zero.mpr mneq0
+        rw[← hm] at this
+        have jabs_lt_aabs : (↑j : ℤ).natAbs < a.natAbs := by
+          exact j_lt_a
+        rw[this] at jabs_lt_aabs
+        have j_eq : j = a.natAbs * m.natAbs := by
+          exact this
+        rw [j_eq] at j_lt_a
+        have h_contra := Nat.mul_le_mul_left a.natAbs mabsge1
+        simp at h_contra
+        linarith
+
+    · intro h
+      let q := (z - b) / a
+      let r := (z - b) % a
+      have h_eq : z = a * q + (b + r) := by
+        have h_eq := Int.ediv_add_emod (z - b) a
+        have : z = z - b + b := by
+          ring
+        rw[this,← h_eq]
+        ring
+      have hr0 : 0 ≤ r := by
+        exact Int.emod_nonneg (z - b) ha
+      have hrlta : r < |a| := by
+        exact Int.emod_lt_abs (z - b) ha
+      have : z = a * q + (b + r) := by
+        have : z - b + b = z:= by
+          ring
+        rw[← this]
+        rw[h_eq]
+        ring
+      by_cases hr : r = 0
+      · -- Then z = a * q + b
+        use q
+        rw [hr, add_zero] at this
+        exact this
+
+      · -- Otherwise r ∈ {1, ..., |a| - 1} ⇒ ↑r ∈ A
+        let r_nat := r.natAbs
+        have hr_nat_eq : ↑r.natAbs = r := Int.natAbs_of_nonneg hr0
+        have r_in_A : r_nat ∈ A := by
+          rw [Finset.mem_Ico]
+          constructor
+          · refine Nat.one_le_iff_ne_zero.mpr ?_
+            have hr : r ≠ 0 := hr
+            have : r.natAbs ≠ 0 := by
+              (expose_names; exact Int.natAbs_ne_zero.mpr hr_1)
+            have eq1 : r_nat = r.natAbs := by
+              rfl
+            rw[eq1]
+            exact this
+          · have eq2 : r_nat = r.natAbs := rfl
+            rw[eq2]
+            have eq3 : a.natAbs = |a| := by
+              exact Int.natCast_natAbs a
+            have hr_nat_abs : ↑r.natAbs = r := Int.natAbs_of_nonneg hr0
+            have eq4: ↑ ((r : ℤ).natAbs : ℤ) < ↑ a.natAbs := by
+              rw[hr_nat_abs]
+              exact Int.emod_lt (z - b) ha
+            exact Int.ofNat_lt.mp eq4
+        -- So z ∈ arithSeq a (b + ↑r_nat), contradiction
+        have : z ∈ arithSeq a (b + ↑r_nat) := by
+          use q
+          rw [this, ← hr_nat_eq]
+        have : z ∈ rest := by
+          simp only [rest, mem_iUnion, Finset.mem_Ico] at r_in_A ⊢
+          exact ⟨r_nat, r_in_A, this⟩
+
+        exact absurd this h.2
+
 
   have hclosed : IsClosed (arithSeq a b) := by
     rw [hcompl]
-    have hopen_compl : IsOpen (⋃ j ∈ A.filter (fun j ↦ j ≠ (b % a).natAbs), arithSeq a (b + j)) := by
+    have hopen_compl : IsOpen rest := by
       apply isOpen_iUnion
       intro i
       refine isOpen_iUnion ?_
       intro hi
       refine TopologicalSpace.isOpen_generateFrom_of_mem ?_
-      sorry
+      unfold FurstenbergBasis
+      use a, b + ↑i
     refine IsClosed.sdiff ?_ hopen_compl
     exact isClosed_univ
   exact ⟨hopen, hclosed⟩
 
-def primes : Set ℤ := { p | Nat.Prime p.natAbs }
+def primes : Set ℕ := { p | Nat.Prime p }
 
 lemma Z_diff_pm1_eq_union_primes :
     univ \ { -1, 1 } = ⋃ p ∈ primes, arithSeq p 0 := by
@@ -262,24 +362,117 @@ lemma Z_diff_pm1_eq_union_primes :
       constructor
       · exact pPrime
       · obtain ⟨n, hn⟩ := pdvdz
-
-
-        sorry
-        match le_or_gt 0 z with
-        | Or.inl hz_nonneg =>
-          -- Handle the case where 0 ≤ z
+        cases Int.le_total 0 z with
+        | inl hpos =>
+          -- z ≥ 0, so z = z.natAbs
           use n
-          have : z = p * n := by
-            match Int.natAbs_eq z with
-            | Or.inl h => rw [h, hn]
-            | Or.inr h => rw [h, hn]
+          have : z.natAbs = z := Int.natAbs_of_nonneg hpos
+          rw[← this]
+          exact congrArg Nat.cast hn
+        | inr hneg =>
+          -- z < 0, so z = -z.natAbs
+          use -↑n
+          have : -z.natAbs = z := Eq.symm (Int.eq_neg_natAbs_of_nonpos hneg)
+          rw[← this]
+          rw[hn]
+          exact Eq.symm (CancelDenoms.neg_subst rfl)
+  · intro h
+    obtain ⟨p,hi ⟩  := h
+    obtain ⟨hp, hn⟩:= hi
+    simp at hn
+    obtain ⟨n, eq⟩ := hn
+    intro zpm1
+    rcases zpm1 with zm1 | z1
+    · rw[zm1] at eq
+      have : -1 * -1 = -1 * p * n := by
+        rw[eq]
+        exact Eq.symm (Int.mul_assoc (↑p * n) (↑p) n)
+      simp at this
+      have h_abs : Int.natAbs (-p * n) = 1 := by
+        rw[← mul_neg_one, mul_assoc, ← mul_comm n, ← mul_assoc, mul_neg_one, ← this]
+        exact rfl
+      have pge2 : p ≥ 2 := by
+        exact Nat.Prime.two_le hp
+      have : (↑p * n).natAbs = 1 := by
+        rw [← Int.natAbs_neg, ← this]
+        exact rfl
+      -- But (↑p * n).natAbs = (↑p).natAbs * n.natAbs ≥ 2 * 1 = 2, contradiction
+      have : (↑p * n).natAbs = p * n.natAbs := by
+        rw [Int.natAbs_mul, Int.natAbs_natCast]
+      have lower_bound : (↑p * n).natAbs ≥ 2 := by
+        rw [this]
+        have n_ne_zero : n ≠ 0 := by
+          intro hn
+          rw [hn, Int.mul_zero] at eq
+          contradiction
+        have pneq0 : p ≠ 0 := Nat.ne_zero_of_lt pge2
+        have npneq0 : p * n ≠ 0 := by
+          refine Int.mul_ne_zero_iff.mpr ?_
+          constructor
+          · exact Nat.cast_ne_zero.mpr pneq0
+          · exact n_ne_zero
+        have p_pos : p > 0 := Nat.Prime.pos hp
+        have n_abs_pos : n.natAbs > 0 := by
+          exact Int.natAbs_pos.mpr n_ne_zero
+        have n_abs_ge1 : n.natAbs ≥ 1 := by
+          exact n_abs_pos
+        exact le_mul_of_le_of_one_le pge2 n_abs_pos
+      -- Contradiction with h_abs : ... = 1
+      linarith
+    · rw[z1] at eq
+      have n_ne_zero : n ≠ 0 := by
+        intro hn
+        rw[hn] at eq
+        simp at eq
+      have pge2 : p ≥ 2 := by
+        exact Nat.Prime.two_le hp
+      have pneq0 : p ≠ 0 := Nat.ne_zero_of_lt pge2
+      have npneq0 : p * n ≠ 0 := by
+        refine Int.mul_ne_zero_iff.mpr ?_
+        constructor
+        · exact Nat.cast_ne_zero.mpr pneq0
+        · exact n_ne_zero
+      have p_pos : p > 0 := Nat.Prime.pos hp
+      have n_abs_pos : n.natAbs > 0 := by
+        exact Int.natAbs_pos.mpr n_ne_zero
+      have n_abs_ge1 : n.natAbs ≥ 1 := by
+        exact n_abs_pos
+      have lower_bound : (↑p * n).natAbs ≥ 2 := by
+        have abs_mul : (↑p * n).natAbs = p * n.natAbs := by
+          rw [Int.natAbs_mul]
+          exact rfl
+        rw [abs_mul]
+        exact le_mul_of_le_of_one_le pge2 n_abs_pos
+      rw[← eq] at lower_bound
+      contradiction
 
-          sorry
-        | Or.inr hz_neg =>
-          -- Handle the case where z < 0
-          sorry
-        sorry
-
-
+-- Main theorem:
+theorem infinitely_many_primes : Set.Infinite {p : ℕ | Nat.Prime p} := by
+  by_contra hfin
+  simp at hfin
+  -- Let S be the union of all S(p, 0) for p prime
+  let S := ⋃ (p ∈ {p : ℕ | Nat.Prime p}), arithSeq p 0
+  -- Each arithSeq p 0 is closed
+  have hclosed : ∀ p : ℕ, Nat.Prime p → IsClosed (arithSeq p 0) := by
+    intros p hp
+    exact (arithSeq_is_clopen (↑p) 0 (Nat.cast_ne_zero.mpr (Nat.Prime.ne_zero hp))).right
+  -- Then S is a finite union of closed sets, hence closed
+  have S_closed : IsClosed S := by
+    have : Finite {p : ℕ | Nat.Prime p} := hfin
+    exact Finite.isClosed_biUnion hfin hclosed
+   -- ℤ \ S = {-1, 1} by your lemma
+  have hS_eq : S = univ \ {-1, 1} := by
+    rw [Z_diff_pm1_eq_union_primes]
+    exact rfl
+  rw [hS_eq] at S_closed
+  -- So {-1, 1} is closed
+  have contra := finite_nonempty_not_open {-1, 1} (by simp) (by simp)
+  have pm1_open: IsOpen ({-1, 1}) := by
+    refine isClosed_compl_iff.mp ?_
+    have : {-1, 1}ᶜ = univ \ {-1 , 1}:= compl_eq_univ_diff {-1, 1}
+    rw[this]
+    exact S_closed
+  contradiction
+-- QED
 
 end Furstenberg
